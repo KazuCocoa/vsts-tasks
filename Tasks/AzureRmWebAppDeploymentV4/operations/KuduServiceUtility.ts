@@ -60,7 +60,7 @@ export class KuduServiceUtility {
                 cmdFilePath = '/home/site/VSTS_PostDeployment_' + uniqueID + '/mainCmdFile' + fileExtension
                 scriprResultPath = '/home/site/VSTS_PostDeployment_' + uniqueID + '/script_result.txt';
             }
-            await this.runCommand(rootDirectoryPath, cmdFilePath + ' ' + uniqueID, 30, scriprResultPath);
+            await this.runCommand(rootDirectoryPath, cmdFilePath + ' ' + uniqueID, 30, scriprResultPath, taskParams.isLinuxApp);
             await this._printPostDeploymentLogs(vstsPostDeploymentFolderPath);
 
         }
@@ -79,7 +79,7 @@ export class KuduServiceUtility {
         finally {
             try {
                 await this._appServiceKuduService.uploadFile(vstsPostDeploymentFolderPath, 'delete_log_file' + fileExtension, path.join(__dirname, '..', 'postDeploymentScript', 'deleteLogFile' + fileExtension));
-                await this.runCommand(vstsPostDeploymentFolderPath, 'delete_log_file' + fileExtension, 0, null);
+                await this.runCommand(vstsPostDeploymentFolderPath, 'delete_log_file' + fileExtension, 0, null, taskParams.isLinuxApp);
                 await this._appServiceKuduService.deleteFolder(vstsPostDeploymentFolderPath);
             }
             catch(error) {
@@ -313,13 +313,22 @@ export class KuduServiceUtility {
         }
     }
 
-    private async runCommand(physicalPath: string, command: string, timeOutInMinutes: number, pollFile: string): Promise<void> {
+    private async runCommand(physicalPath: string, command: string, timeOutInMinutes: number, pollFile: string, isLinuxApp: boolean): Promise<void> {
         try {
             await this._appServiceKuduService.runCommand(physicalPath, command);
         }
         catch(error) {
-            if(timeOutInMinutes > 0 && error.toString().indexOf('Request timeout: /api/command') != -1) {
+            if(pollFile != null && timeOutInMinutes > 0 && error.toString().indexOf('Request timeout: /api/command') != -1) {
                 tl.debug('Request timeout occurs. Trying to poll for file: ' + pollFile);
+                var filePath, fileName;
+                if(isLinuxApp){
+                    fileName = pollFile.split("/").pop().split("/").pop();
+                    filePath = pollFile.split("/").slice(1,-1).join("/");
+                }
+                else{
+                    fileName = pollFile.split("\\").pop().split("\\").pop();
+                    filePath = pollFile.split("\\").slice(1,-1).join("\\");
+                }
                 await this._pollForFile(physicalPath, pollFile, timeOutInMinutes);
             }
             else {
